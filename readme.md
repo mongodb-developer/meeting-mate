@@ -1,11 +1,13 @@
+> [!IMPORTANT]  
+> This is ***not*** meant to be a starter project, an accelerator, a library or anything similar. 
+> This little application aims to provide a complete end-to-end example of how one might implement 
+> fact extraction while also considering several operational aspects of such an app, 
+> such as storing processing metadata, tracking usage, archiving Chatbot responses and so on.
+>
+> It doesn't aim at a perfect implementation of a Google Crawler or the correct way to wrap around Langchain.
+
 # Project set-up / pre-reqs
-To get started, make sure you have a MongoDB Atlas cluster available. Sign up [here](https://account.mongodb.com/account/register) for free and create a free M0 cluster. We will also be working with [MongoDB Compass](https://www.mongodb.com/products/tools/compass) to inspect data in the database. You can download and use it to confirm that your IP access list is set up correctly and your applications can connect to the database.
-
-The final download is the crypt-shared library required for client-side encryption with MongoDB. Navigate to the [download section](https://www.mongodb.com/try/download/enterprise-advanced) on the MongoDB Enterprise Advanced section and download the crypt-shared library. We will use it in the very first part of the workshop.
-
-<img src="./docs/img/crypt_shared.png" alt="Download dropdown" width="350px">
-
-From the "MongoDB Enterprise Server Download" section, select the latest version, your client Platform (in this case - your workstation's OS) and "crypt_shared" for package.
+We've outlined some prep steps [in this gist](https://gist.github.com/mybyte/28af72af02e97febeec8c60b0a5e651f), such as necessary downloads.
 
 ## Used APIs and services
 We're going to focus on User Sign on via Google Oauth and access the user's drive/docs in the Google Suite. For those who would like to follow along - you'll have to sign up on Google Cloud and configure Oauth consent screen & API access in the [Google API dashboard](https://console.cloud.google.com/apis/dashboard).
