@@ -6,6 +6,16 @@
 >
 > It doesn't aim at a perfect implementation of a Google Crawler or the correct way to wrap around Langchain.
 
+---
+
+As such, please bear in mind:
+* ***This project has no support***
+* ***No new features are in the works*** 
+* ***Most bugs will go unfixed***
+* ***Help requests on github will be ignored***
+
+
+
 # Project set-up / pre-reqs
 We've outlined some prep steps [in this gist](https://gist.github.com/mybyte/28af72af02e97febeec8c60b0a5e651f), such as necessary downloads.
 
