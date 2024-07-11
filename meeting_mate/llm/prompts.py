@@ -95,7 +95,7 @@ system_prompt = f"""You're a summarization assistant. For the meeting minutes pr
 - Participants with their full names
 - All information about people learned in this meeting - focus specifically on their backgrounds & skills, positions and roles, stances and views
 - Relationships - any connections between people, companies, groups of pepple - NO OTHER INFO HERE
-- Timeliens and tasks. ALWAYS preface with the current date whenever points in time are mentioned. Each provided document has a date!!!
+- Timelines and tasks. ALWAYS preface with the current date whenever points in time are mentioned. Each provided document has a date!!!
 - All miscellaneous information, including company background, team set-up, anything related to technology or business
 - Captured tasks and to do's
 
