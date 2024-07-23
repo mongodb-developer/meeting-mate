@@ -9,6 +9,9 @@ from langchain_core.messages import BaseMessage
 from enum import Enum
 from pydantic.v1 import BaseModel, Field, root_validator, validator
 from langchain_core.embeddings import Embeddings
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
 
 class ModelProvider(Enum):
     FIREWORKS = "fireworks"
@@ -43,6 +46,14 @@ class EmbeddingModels(Enum):
         'type': ModelType.EMBEDDING,
         'price' : {
              'input': 0.008
+        }
+    },
+    MXBAI_LARGE = {
+        'id': "mixedbread-ai/mxbai-embed-large-v1",
+        'provider': ModelProvider.FIREWORKS,
+        'type': ModelType.EMBEDDING,
+        'price' : {
+             'input': 0.016
         }
     }
 

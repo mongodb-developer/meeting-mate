@@ -4,6 +4,10 @@ from meeting_mate.llm.models import EmbeddingsModel
 import json
 from pydantic import BaseModel, Field
 
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
+
 class Retriever(BaseModel):
     embeddingModel: EmbeddingsModel = Field(..., description="The embedding model to use for the retriever")
     vector_index: str
