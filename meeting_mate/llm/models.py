@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Sequence, Union
 from meeting_mate.mongo.mongo import INSTANCE as mongo
 from langchain_fireworks import ChatFireworks
+from langchain_openai import ChatOpenAI
 from openai import OpenAI
 import os
 from langchain_core.language_models import LanguageModelInput
@@ -9,12 +10,13 @@ from langchain_core.messages import BaseMessage
 from enum import Enum
 from pydantic.v1 import BaseModel, Field, root_validator, validator
 from langchain_core.embeddings import Embeddings
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 
-load_dotenv(override=True)
+config = dotenv_values(".env")
 
 class ModelProvider(Enum):
     FIREWORKS = "fireworks"
+    OPENAI = "openai"
 
 class ModelType(Enum):
     CHAT = "chat"
@@ -36,6 +38,26 @@ class ChatModels(Enum):
         'price' : {
              'input': 0.2, 
              'completion': 0.2
+        }
+    }
+
+    GPT_4O_MINI = {
+        'id': "gpt-4-turbo",
+        "provider": ModelProvider.OPENAI,
+        "type": ModelType.CHAT,
+        "price": {
+            "input": 0.15,
+            "completion": 0.6
+        }
+    }
+
+    GPT_4O = {
+        'id': "gpt-4o",
+        "provider": ModelProvider.OPENAI,
+        "type": ModelType.CHAT,
+        "price": {
+            "input": 5,
+            "completion": 15
         }
     }
     
@@ -81,10 +103,16 @@ def _calculate_costs(metadata, model: ChatModels)->float:
 
 def _getChat(model: ChatModels, temperature:float, max_tokens:int):
     if model.value["provider"] == ModelProvider.FIREWORKS:
-        fireworks_key = os.environ.get("fireworks_api_key")
+        fireworks_key = config.get("fireworks_api_key")
         if not fireworks_key:
             raise Exception("No fireworks api key found")
         return ChatFireworks(fireworks_api_key=fireworks_key, model=f"accounts/fireworks/models/{model.value['id']}")
+    elif model.value["provider"] == ModelProvider.OPENAI:
+        openai_key = config.get("openai_api_key")
+        if not openai_key:
+            raise Exception("No openai api key found")
+        return ChatOpenAI(openai_api_key=openai_key, model=model.value["id"])
+        
     else:
         raise Exception("Invalid provider")
 
