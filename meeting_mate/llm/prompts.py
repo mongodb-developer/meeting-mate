@@ -2,6 +2,7 @@
 import json
 from jsonschema import validate
 from datetime import datetime
+from pydantic import BaseModel
 
 facts_answer_schema = {
     "type": "object",
@@ -210,7 +211,34 @@ class Templates:
         """
         return context
     
+class BaseMessage(BaseModel):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.model_validate
+
+    @classmethod
+    def model_validate(cls, v):
+        if not issubclass(v, BaseMessage):
+            raise ValueError(f"Expected a subclass of BaseMessage, got {v}")
+        return v
     
+    content:str
+
+    def toJSON(self):
+        return self.model_dump_json()
 
 
+class AssistantMessage(BaseMessage):
+    role:str = "assistant"
 
+class UserMessage(BaseMessage):
+    role:str = "user"
+
+class SystemMessage(BaseMessage):
+    role:str = "system"
+
+if __name__ == "__main__":
+    messages = [AssistantMessage(content="Hello!"), UserMessage(content="Hi!")]
+    messages = [message.toJSON() for message in messages]
+
+    print(json.dumps(messages, indent=4))

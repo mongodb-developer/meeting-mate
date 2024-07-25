@@ -5,11 +5,10 @@ from meeting_mate.llm.models import ChatModel, ChatModels
 from st_combobox import st_combobox
 import meeting_mate.mongo.retrieval as retrieval
 from meeting_mate.llm.models import EmbeddingModels, EmbeddingsModel
-from langchain_core.messages import HumanMessage, SystemMessage
-from meeting_mate.llm.prompts import Templates
-import os
-import json
+from meeting_mate.llm.prompts import Templates, SystemMessage, UserMessage
 from dotenv import load_dotenv
+import asyncio
+from typing import AsyncGenerator
 
 load_dotenv()
 
@@ -83,10 +82,9 @@ def generate_answer(search_results: list, question: str):
     facts = [result["facts"] for result in search_results]
     context = Templates.build_qa_context(facts, question)
 
-    prompt = [SystemMessage(Templates.answer_question_system_prompt()), HumanMessage(context)]
+    prompt = [SystemMessage(content=Templates.answer_question_system_prompt()), UserMessage(content=context)]
     
-    response = model.invoke(prompt, "Document Q&A in streamlit", user_id)
-    return response
+    return model.invoke_streaming(prompt, "Document Q&A in streamlit", user_id)
 
 if not st.session_state.customers:
     st.markdown("Please select customers to proceed.")
@@ -113,6 +111,6 @@ else:
 
         right.markdown(f"Question: {question}")
 
-        st.spinner("Generating answer...")    
-        answer = generate_answer(results, question)        
-        right.markdown(answer)
+        st.spinner("Generating answer...")
+
+        right.write_stream(generate_answer(results, question))

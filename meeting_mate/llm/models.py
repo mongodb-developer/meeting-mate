@@ -1,16 +1,10 @@
 from datetime import datetime
-from typing import Any, Dict, List, Sequence, Union
+from typing import Sequence, Union
 from meeting_mate.mongo.mongo import INSTANCE as mongo
-from langchain_fireworks import ChatFireworks
-from langchain_openai import ChatOpenAI
 from openai import OpenAI
-import os
-from langchain_core.language_models import LanguageModelInput
-from langchain_core.messages import BaseMessage
 from enum import Enum
-from pydantic.v1 import BaseModel, Field, root_validator, validator
-from langchain_core.embeddings import Embeddings
 from dotenv import dotenv_values
+from meeting_mate.llm.prompts import BaseMessage, UserMessage, SystemMessage
 
 config = dotenv_values(".env")
 
@@ -69,7 +63,7 @@ class EmbeddingModels(Enum):
         'price' : {
              'input': 0.008
         }
-    },
+    }
     MXBAI_LARGE = {
         'id': "mixedbread-ai/mxbai-embed-large-v1",
         'provider': ModelProvider.FIREWORKS,
@@ -79,15 +73,8 @@ class EmbeddingModels(Enum):
         }
     }
 
-def _calculate_costs(metadata, model: ChatModels)->float:
-    usage = None
-    if "usage" in metadata:
-        usage = metadata["usage"]
-    elif "token_usage" in metadata:
-        usage = metadata["token_usage"]
-    elif "token_count" in metadata:
-        usage = metadata["token_count"]
-    else:
+def _calculate_costs(usage, model: ChatModels)->float:
+    if usage is None:
         raise Exception("No usage found in response meta")
     
     input = usage["prompt_tokens"] if "prompt_tokens" in usage else usage["input_tokens"]
@@ -101,17 +88,22 @@ def _calculate_costs(metadata, model: ChatModels)->float:
 
     return input + output
 
-def _getChat(model: ChatModels, temperature:float, max_tokens:int):
+
+
+def _getChat(model: ChatModels, temperature:float, max_tokens:int)->OpenAI:
     if model.value["provider"] == ModelProvider.FIREWORKS:
         fireworks_key = config.get("fireworks_api_key")
         if not fireworks_key:
             raise Exception("No fireworks api key found")
-        return ChatFireworks(fireworks_api_key=fireworks_key, model=f"accounts/fireworks/models/{model.value['id']}")
+        
+        return OpenAI(api_key=fireworks_key, base_url="https://api.fireworks.ai/inference/v1")
+
     elif model.value["provider"] == ModelProvider.OPENAI:
         openai_key = config.get("openai_api_key")
         if not openai_key:
             raise Exception("No openai api key found")
-        return ChatOpenAI(openai_api_key=openai_key, model=model.value["id"])
+        
+        return OpenAI(openai_api_key=openai_key)
         
     else:
         raise Exception("Invalid provider")
@@ -122,7 +114,7 @@ class EmbeddingsModel():
         self._model = model
         
         if model.value["provider"] == ModelProvider.FIREWORKS:
-            fireworks_key = os.environ.get("fireworks_api_key")
+            fireworks_key = config.get("fireworks_api_key")
             if not fireworks_key:
                 raise Exception("No fireworks api key found")
             
@@ -149,7 +141,7 @@ class EmbeddingsModel():
         results, metadata = self._embed(input)
         took = (datetime.now() - start).total_seconds()
 
-        costs = _calculate_costs(metadata, self._model)
+        costs = _calculate_costs(metadata["usage"], self._model)
 
         mongo.db["protocol"].insert_one({
             "user": user,
@@ -162,58 +154,105 @@ class EmbeddingsModel():
         })
 
         return results
-    
-class LangchainEmbeddingsModel(BaseModel, Embeddings):
-    model: EmbeddingsModel = Field(default=None, required=True)
-    user: str
-    purpose: str
-
-    class Config:
-        arbitrary_types_allowed = True
-
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        return self.model.invoke(texts, purpose=self.purpose, user=self.user)
-    
-    def embed_query(self, text: str) -> List[float]:
-        return self.model.invoke(text, purpose=self.purpose, user=self.user)[0]
-
+       
 class ChatModel:
     def __init__(self, model: ChatModels, temperature=0.7, max_tokens=2000):
         self._model = model
-        self._chat = _getChat(model, temperature, max_tokens)
 
-    def _toSerializable(self, input: LanguageModelInput):
-        if isinstance(input, str):
-            return input
-        elif isinstance(input, BaseMessage ):
-            return input.to_json()
-        elif isinstance(input, Sequence):
-            if all(isinstance(i, BaseMessage) for i in input):
-                return [i.to_json() for i in input]
-            else:
-                raise Exception("Invalid input")
+        if(model.value["provider"] == ModelProvider.FIREWORKS):
+            self._model_id = f"accounts/fireworks/models/{model.value['id']}"
         else:
-            raise Exception("Invalid input")
+            self._model_id = model.value["id"]
+
+        self._chat = _getChat(model, temperature, max_tokens).chat
     
-    def invoke(self, input: LanguageModelInput, purpose: str, user: str):
+    def invoke(self, input: Sequence[BaseMessage], purpose: str, user: str):
+        messages = [message.model_dump() for message in input]
+
         start = datetime.now()
-        chat_response = self._chat.invoke(input)            
+        chat_response = self._chat.completions.create(messages=messages, model=self._model_id)
         took = (datetime.now() - start).total_seconds()
 
-        costs = _calculate_costs(chat_response.response_metadata, self._model)
+        costs = _calculate_costs(chat_response.usage.model_dump(), self._model)
 
         mongo.db["protocol"].insert_one({
             "user": user,
             "timestamp":datetime.now(),
             "model": self._model.value["id"],
             "chat": {
-                "input": self._toSerializable(input),
-                "response":chat_response.content,
-                "metadata":chat_response.response_metadata
+                "input": messages,
+                "response": chat_response.model_dump(),
             },
             "took":took,
             "cost": costs,
             "task": purpose
         })
 
-        return chat_response.content
+        return chat_response.choices[0].message.content
+    
+    async def invoke_async(self, input: Sequence[BaseMessage], purpose: str, user: str):
+        messages = [message.model_dump() for message in input]
+        start = datetime.now()
+
+        chunks = []
+        for resp in self._chat.completions.create(messages=messages, model=self._model_id, stream=True):
+            chunks.append(resp.model_dump())
+            yield resp.choices[0].delta.content
+
+        took = (datetime.now() - start).total_seconds()
+        last_chunk = chunks[-1]
+        costs = _calculate_costs(last_chunk["usage"], self._model)
+
+        mongo.db["protocol"].insert_one({
+            "user": user,
+            "timestamp":datetime.now(),
+            "model": self._model.value["id"],
+            "chat": {
+                "input": messages,
+                "response": chunks,
+            },
+            "took":took,
+            "cost": costs,
+            "task": purpose
+        })
+
+    def invoke_streaming(self, input: Sequence[BaseMessage], purpose: str, user: str):
+        messages = [message.model_dump() for message in input]
+        start = datetime.now()
+
+        chunks = []
+        for resp in self._chat.completions.create(messages=messages, model=self._model_id, stream=True):
+            chunks.append(resp.model_dump())
+            content = resp.choices[0].delta.content
+            if content is not None:
+                yield content
+
+        took = (datetime.now() - start).total_seconds()
+        last_chunk = chunks[-1]
+        costs = _calculate_costs(last_chunk["usage"], self._model)
+
+        mongo.db["protocol"].insert_one({
+            "user": user,
+            "timestamp":datetime.now(),
+            "model": self._model.value["id"],
+            "chat": {
+                "input": messages,
+                "response": chunks,
+            },
+            "took":took,
+            "cost": costs,
+            "task": purpose
+        })
+    
+def testGeneration():
+    chat = ChatModel(ChatModels.LLAMA3_8B_INSTRUCT)
+    messages = [SystemMessage(content="You're a moody, passive-aggressive personal assistant. You're not very good at your job and you're being a dick about it."),
+                UserMessage(content = "Tell me very short story about a young wizard. Make it a looong story with multiple exciting chapters!")]
+    
+    for chunk in chat.invoke_streaming(input=messages, purpose="test", user="root"):
+        print(chunk, sep='', end='')
+    print("\n")
+
+if __name__ == "__main__":
+    # test completions
+    testGeneration()
