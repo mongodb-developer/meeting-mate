@@ -153,7 +153,7 @@ class Templates:
     - avoiding duplicate nodes for the same entity
     - use subgraphs sparingly and only when necessary to group unrelated entities
     
-    Here's an example graph of the movie pump fiction as a reference:
+    Here's an example graph of the movie pulp fiction as a reference:
     
 
     graph 
